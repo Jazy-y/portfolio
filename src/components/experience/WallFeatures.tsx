@@ -128,6 +128,8 @@ function corkTexture() {
 export const PINBOARD_X = -1.86;
 
 export function Pinboard({ go }: { go: (s: Section) => void }) {
+  // no "open this section" label while the section is already open
+  const here = useStore((s) => s.section === "about");
   const cork = useMemo(() => corkTexture(), []);
   const cards = useMemo(
     () => [
@@ -141,7 +143,7 @@ export function Pinboard({ go }: { go: (s: Section) => void }) {
   );
   const pins = cards.map((c) => new THREE.Vector3(c.pos[0], c.pos[1] + c.size[1] / 2 - 0.02, 0.02));
   return (
-    <Interactive id="about" label={`About ${profile.firstName} →`} onSelect={() => go("about")} labelPosition={[PINBOARD_X, 2.02, WALL_Z + 0.1]} lift={0}>
+    <Interactive id="about" label={`About ${profile.firstName} →`} onSelect={() => go("about")} labelPosition={[PINBOARD_X, 2.02, WALL_Z + 0.1]} lift={0} enabled={!here}>
       <group position={[PINBOARD_X, 1.6, WALL_Z + 0.025]}>
         <RoundedBox args={[0.98, 0.7, 0.03]} radius={0.01} castShadow receiveShadow>
           <meshStandardMaterial color="#3a2a1d" roughness={0.6} />
@@ -219,6 +221,7 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, x: number, y: number,
 }
 
 export function TimelineWall({ go }: { go: (s: Section) => void }) {
+  const here = useStore((s) => s.section === "experience");
   const textures = useMemo(() => timeline.map(timelineCardTexture), []);
   const railMat = useRef<THREE.MeshStandardMaterial>(null);
   useFrame((state) => {
@@ -229,7 +232,7 @@ export function TimelineWall({ go }: { go: (s: Section) => void }) {
   const gap = 0.27;
   return (
     <group>
-      <Interactive id="experience" label="Experience & education →" onSelect={() => go("experience")} labelPosition={[1.93, 1.95, WALL_Z + 0.1]} lift={0}>
+      <Interactive id="experience" label="Experience & education →" onSelect={() => go("experience")} labelPosition={[1.93, 1.95, WALL_Z + 0.1]} lift={0} enabled={!here}>
         <group position={[0, 0, WALL_Z + 0.02]}>
           <mesh position={[startX + gap * 1.5, 1.42, 0]}>
             <boxGeometry args={[gap * 4 + 0.08, 0.008, 0.008]} />
@@ -354,7 +357,7 @@ export function SkillsHologram({ section, go }: { section: Section; go: (s: Sect
   const levels = skillGroups.length;
   return (
     <group>
-      <Interactive id="skills" label="Explore skills →" onSelect={() => go("skills")} labelPosition={[HOLO_POS[0], DESK_TOP + 0.3, HOLO_POS[2]]}>
+      <Interactive id="skills" label="Explore skills →" onSelect={() => go("skills")} labelPosition={[HOLO_POS[0], DESK_TOP + 0.3, HOLO_POS[2]]} enabled={!open}>
         <group position={HOLO_POS}>
           <mesh position={[0, 0.012, 0]} castShadow>
             <cylinderGeometry args={[0.055, 0.065, 0.024, 40]} />

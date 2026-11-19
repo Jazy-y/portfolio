@@ -12,13 +12,14 @@ import { PhonePainter } from "./painters";
 import { canvasTexture, createCanvas, fontFamily } from "./textures";
 
 export function Peripherals({ go }: { go: (s: "contact") => void }) {
+  const here = useStore((s) => s.section === "contact");
   return (
     <group>
       <Mouse />
       <Headphones />
       <Speaker position={[-1.13, DESK_TOP, -0.74]} rotation={0.25} />
       <Speaker position={[1.13, DESK_TOP, -0.74]} rotation={-0.25} />
-      <Interactive id="contact" label="Contact →" onSelect={() => go("contact")} labelPosition={[-0.68, DESK_TOP + 0.16, -0.12]}>
+      <Interactive id="contact" label="Contact →" onSelect={() => go("contact")} labelPosition={[-0.68, DESK_TOP + 0.16, -0.12]} enabled={!here}>
         <Notebook />
         <Phone />
       </Interactive>
