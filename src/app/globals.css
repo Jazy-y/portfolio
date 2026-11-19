@@ -357,7 +357,6 @@ body {
 }
 .demo-phone {
   width: min(360px, 88vw, calc((100dvh - 9rem) * 0.459));
-  aspect-ratio: 0.459;
   border-radius: 34px;
   padding: 9px;
   background: linear-gradient(145deg, #2b3038, #121418);
