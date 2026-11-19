@@ -12,6 +12,7 @@ import { Desk } from "./Desk";
 import { Keyboard } from "./Keyboard";
 import { Monitors } from "./Monitors";
 import { Peripherals } from "./Peripherals";
+import { PhoneShowcase } from "./PhoneShowcase";
 import { Room } from "./Room";
 import { Pinboard, SkillsHologram, TimelineWall } from "./WallFeatures";
 
@@ -48,7 +49,8 @@ export default function Scene({ section, mobile, onNavigate, onReady }: Props) {
         <Room />
         <Desk />
         <Keyboard />
-        <Monitors section={section} go={onNavigate} />
+        <Monitors section={section} go={onNavigate} mobile={mobile} />
+        <PhoneShowcase />
         <Peripherals go={onNavigate} />
         <Pinboard go={onNavigate} />
         <TimelineWall go={onNavigate} />

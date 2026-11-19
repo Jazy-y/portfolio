@@ -14,6 +14,14 @@ type State = {
   quality: Quality;
   reducedMotion: boolean;
   lampOn: boolean;
+  /** Close-up on the live website or the phone demo (desktop 3D only). */
+  focus: boolean;
+  /** True once the camera has finished flying to the current shot. */
+  arrived: boolean;
+  /** Desktop 3D view: the project showcases can be used in place. */
+  canFocus: boolean;
+  /** Slug of the project whose demo is open in the 2D modal. */
+  demo: string | null;
   setSection: (s: Section) => void;
   setPhase: (p: Phase) => void;
   setPower: (v: number) => void;
@@ -22,6 +30,10 @@ type State = {
   setQuality: (q: Quality) => void;
   setReducedMotion: (r: boolean) => void;
   toggleLamp: () => void;
+  setFocus: (f: boolean) => void;
+  setArrived: (a: boolean) => void;
+  setCanFocus: (c: boolean) => void;
+  setDemo: (slug: string | null) => void;
 };
 
 export const useStore = create<State>((set) => ({
@@ -33,12 +45,20 @@ export const useStore = create<State>((set) => ({
   quality: "high",
   reducedMotion: false,
   lampOn: true,
-  setSection: (section) => set({ section }),
+  focus: false,
+  arrived: false,
+  canFocus: false,
+  demo: null,
+  setSection: (section) => set({ section, focus: false }),
   setPhase: (phase) => set({ phase }),
   setPower: (power) => set({ power }),
-  setProjectIndex: (projectIndex) => set({ projectIndex }),
+  setProjectIndex: (projectIndex) => set({ projectIndex, focus: false }),
   setHovered: (hovered) => set({ hovered }),
   setQuality: (quality) => set({ quality }),
   setReducedMotion: (reducedMotion) => set({ reducedMotion }),
   toggleLamp: () => set((s) => ({ lampOn: !s.lampOn })),
+  setFocus: (focus) => set({ focus }),
+  setArrived: (arrived) => set({ arrived }),
+  setCanFocus: (canFocus) => set({ canFocus }),
+  setDemo: (demo) => set({ demo }),
 }));

@@ -302,3 +302,66 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Project showcases (3D phone + live websites) ──────────────────────────── */
+.cg-phone-screen {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #fff;
+  animation: screen-on 0.7s ease-out both;
+}
+.cg-island {
+  position: absolute;
+  top: 9px;
+  left: 50%;
+  width: 96px;
+  height: 26px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #000;
+  z-index: 30;
+  pointer-events: none;
+}
+@keyframes screen-on {
+  from {
+    opacity: 0;
+    filter: brightness(2.2) blur(2px);
+  }
+}
+.live-site {
+  position: relative;
+  overflow: hidden;
+  /* the painted screenshot shows through until the iframe has loaded */
+  background: transparent;
+}
+.live-site iframe {
+  display: block;
+  border: 0;
+  background: #fff;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.live-site[data-loaded] iframe {
+  opacity: 1;
+}
+.live-site-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 22px;
+  color: #5eead4;
+  background: rgb(5 10 16 / 0.6);
+}
+.demo-phone {
+  width: min(360px, 88vw, calc((100dvh - 9rem) * 0.459));
+  aspect-ratio: 0.459;
+  border-radius: 34px;
+  padding: 9px;
+  background: linear-gradient(145deg, #2b3038, #121418);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    0 30px 80px -20px rgb(0 0 0 / 0.8);
+}

@@ -7,7 +7,8 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   turbopack: {
     rules: {
-      "*.css": {
+      // Tailwind only processes the global stylesheet; CSS modules keep their scoped class names.
+      "globals.css": {
         loaders: ["@tailwindcss/turbopack"],
         as: "*.css",
       },

@@ -4,8 +4,9 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import gsap from "gsap";
-import type { Section } from "@/content/profile";
+import { projects, type Section } from "@/content/profile";
 import { useStore } from "@/lib/store";
+import { MONITOR_CENTER, MONITOR_SCREEN, PHONE_POS, PHONE_SIZE } from "./showcaseLayout";
 
 type Shot = { pos: [number, number, number]; look: [number, number, number] };
 
@@ -27,21 +28,74 @@ function mobileShot(pos: [number, number, number], subject: [number, number, num
 export const SHOTS: Record<"desktop" | "mobile", Record<Section, Shot>> = {
   desktop: {
     home: { pos: [0.75, 1.52, 1.85], look: [-0.15, 1.02, -0.6] },
-    about: { pos: [-1.38, 1.62, 0.32], look: [-1.32, 1.6, -1.2] },
+    about: { pos: [-1.52, 1.62, 0.45], look: [-1.46, 1.6, -1.2] },
     projects: { pos: [0.42, 1.17, 1.12], look: [0.4, 1.1, -0.72] },
     skills: { pos: [1.22, 1.46, 1.36], look: [1.17, 1.1, -0.1] },
-    experience: { pos: [1.5, 1.56, 0.42], look: [1.48, 1.48, -1.2] },
+    // cards span x 1.43–2.45 on the wall; centred in the free space right of the panel
+    experience: { pos: [1.66, 1.56, 0.42], look: [1.66, 1.46, -1.2] },
     contact: { pos: [-0.3, 1.32, 0.66], look: [-0.38, 0.8, -0.18] },
   },
   mobile: {
     home: mobileShot([0.45, 1.8, 3.2], [0.0, 1.0, -0.6]),
-    about: mobileShot([-1.72, 1.55, 0.65], [-1.72, 1.6, -1.2]),
+    about: mobileShot([-1.86, 1.55, 0.65], [-1.86, 1.6, -1.2]),
     projects: mobileShot([0.0, 1.18, 1.2], [0.0, 1.14, -0.72]),
     skills: mobileShot([0.78, 1.35, 1.4], [0.78, 1.14, -0.1]),
-    experience: mobileShot([1.82, 1.5, 0.75], [1.82, 1.42, -1.2]),
+    experience: mobileShot([1.93, 1.5, 0.75], [1.93, 1.42, -1.2]),
     contact: mobileShot([-0.55, 1.4, 0.8], [-0.62, 0.8, -0.15]),
   },
 };
+
+const [px, py, pz] = PHONE_POS;
+const [mx, my, mz] = MONITOR_CENTER;
+
+/** Extra framings for the project showcases (phone demo and live websites). */
+const SHOWCASE_SHOTS = {
+  desktop: {
+    // the phone sits left of centre, clear of the content panel on the right
+    phone: { pos: [px + 0.175, py + 0.06, pz + 0.84], look: [px + 0.175, py, pz] },
+  },
+  mobile: {
+    // aimed well below the phone so it sits in the top ~40% of the screen, above the bottom sheet
+    phone: { pos: [px, py + 0.05, pz + 1.05], look: [px, py - 0.4, pz] },
+  },
+} satisfies Record<string, Record<string, Shot>>;
+
+/**
+ * Straight-on close-up that fits a w×h subject (plus margin) in the current
+ * viewport, whatever its aspect ratio.
+ */
+function fitShot(center: [number, number, number], w: number, h: number, margin: number, vfovDeg: number, aspect: number): Shot {
+  const tanV = Math.tan(THREE.MathUtils.degToRad(vfovDeg) / 2);
+  const tanH = tanV * aspect;
+  const dist = Math.max((h * margin) / 2 / tanV, (w * margin) / 2 / tanH);
+  return { pos: [center[0], center[1], center[2] + dist], look: center };
+}
+
+type View = { vfov: number; aspect: number };
+
+/** Picks the camera framing for the current section, project and focus state. */
+function pickShot(section: Section, mobile: boolean, projectIndex: number, focus: boolean, view?: View): { key: string; shot: Shot } {
+  const device = mobile ? "mobile" : "desktop";
+  if (section === "projects") {
+    const showcase = projects[projectIndex]?.showcase;
+    if (showcase === "phone") {
+      if (mobile) return { key: "phone-m", shot: SHOWCASE_SHOTS.mobile.phone };
+      if (focus && view) return { key: "phone-focus", shot: fitShot([px, py + 0.018, pz], PHONE_SIZE.w, PHONE_SIZE.h, 1.5, view.vfov, view.aspect) };
+      return { key: "phone", shot: SHOWCASE_SHOTS.desktop.phone };
+    }
+    // the screen fills the view, leaving room for the focus bar at the top
+    if (showcase === "site" && focus && !mobile && view)
+      return { key: "site-focus", shot: fitShot([mx, my + 0.012, mz], MONITOR_SCREEN[0], MONITOR_SCREEN[1], 1.12, view.vfov, view.aspect) };
+  }
+  return { key: `${section}-${device}`, shot: SHOTS[device][section] };
+}
+
+/** Vertical FOV that keeps the horizontal field of view constant. */
+function vfovFor(aspect: number, mobile: boolean) {
+  const hfov = mobile ? 62 : 63; // degrees — a 38° vertical FOV at 16:9
+  const vfov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(hfov / 2)) / aspect));
+  return THREE.MathUtils.clamp(vfov, 34, mobile ? 78 : 66);
+}
 
 export const INTRO_START: Shot = { pos: [3.1, 2.35, 4.4], look: [0.2, 1.0, -0.6] };
 
@@ -70,6 +124,10 @@ export function CameraRig({ section, mobile }: { section: Section; mobile: boole
   const reduced = useStore((s) => s.reducedMotion);
   const setPower = useStore((s) => s.setPower);
   const setPhase = useStore((s) => s.setPhase);
+  const setArrived = useStore((s) => s.setArrived);
+  const projectIndex = useStore((s) => s.projectIndex);
+  const focus = useStore((s) => s.focus);
+  const aspect = useThree((st) => st.size.width / Math.max(1, st.size.height));
 
   const rig = useRef<RigState>({
     curve: null,
@@ -88,29 +146,33 @@ export function CameraRig({ section, mobile }: { section: Section; mobile: boole
   });
 
   /** Arc from the current camera position to `shot`; progress starts at 0. */
-  const prepare = (shot: Shot) => {
+  const prepare = (shot: Shot, direct = false) => {
     const s = rig.current;
     const from = s.base.clone();
     const to = v(shot.pos);
     const mid = from.clone().lerp(to, 0.5);
     // lift and pull the midpoint toward the viewer so the path never cuts through the desk or walls
-    mid.y += 0.18 + from.distanceTo(to) * 0.08;
-    mid.z = Math.max(mid.z, 0.55) + 0.15;
+    if (!direct) {
+      mid.y += 0.18 + from.distanceTo(to) * 0.08;
+      mid.z = Math.max(mid.z, 0.55) + 0.15;
+    }
     s.curve = new THREE.CatmullRomCurve3([from, mid, to], false, "centripetal");
     s.lookFrom.copy(s.look);
     s.lookTo.copy(v(shot.look));
     s.progress.t = 0;
   };
 
-  const flyTo = (shot: Shot, duration: number) => {
+  const flyTo = (shot: Shot, duration: number, direct = false) => {
     const s = rig.current;
     s.move?.kill();
-    prepare(shot);
+    prepare(shot, direct);
     if (duration <= 0) {
       s.progress.t = 1;
+      setArrived(true);
       return;
     }
-    s.move = gsap.to(s.progress, { t: 1, duration, ease: "power3.inOut" });
+    setArrived(false);
+    s.move = gsap.to(s.progress, { t: 1, duration, ease: "power3.inOut", onComplete: () => setArrived(true) });
   };
 
   // Intro: slow dolly in while the room powers on.
@@ -118,8 +180,8 @@ export function CameraRig({ section, mobile }: { section: Section; mobile: boole
     const s = rig.current;
     if (phase !== "intro" || s.introPlayed) return;
     s.introPlayed = true;
-    const shot = SHOTS[mobile ? "mobile" : "desktop"][section];
-    s.lastKey = `${section}-${mobile}`;
+    const { key, shot } = pickShot(section, mobile, projectIndex, false);
+    s.lastKey = key;
     if (reduced) {
       flyTo(shot, 0);
       setPower(1);
@@ -128,7 +190,12 @@ export function CameraRig({ section, mobile }: { section: Section; mobile: boole
     }
     prepare(shot);
     const power = { p: 0 };
-    const tl = gsap.timeline({ onComplete: () => setPhase("explore") });
+    const tl = gsap.timeline({
+      onComplete: () => {
+        setPhase("explore");
+        setArrived(true);
+      },
+    });
     tl.to(s.progress, { t: 1, duration: 3.6, ease: "power2.inOut" }, 0);
     tl.to(power, { p: 1, duration: 2.6, ease: "power1.inOut", onUpdate: () => setPower(power.p) }, 0.7);
     s.intro = tl;
@@ -141,19 +208,30 @@ export function CameraRig({ section, mobile }: { section: Section; mobile: boole
     if (phase === "explore" && s.intro?.isActive()) {
       s.intro.progress(1);
       setPower(1);
+      setArrived(true);
     }
-  }, [phase, setPower]);
+  }, [phase, setPower, setArrived]);
 
   // Section changes after the intro.
   useEffect(() => {
     const s = rig.current;
     if (phase !== "explore") return;
-    const key = `${section}-${mobile}`;
+    const { key, shot } = pickShot(section, mobile, projectIndex, focus, { vfov: vfovFor(aspect, mobile), aspect });
     if (s.lastKey === key) return;
+    const zoom = s.lastKey.endsWith("focus") || key.endsWith("focus");
     s.lastKey = key;
-    flyTo(SHOTS[mobile ? "mobile" : "desktop"][section], reduced ? 0 : 1.7);
+    // short, direct move for zooming in and out of a showcase
+    flyTo(shot, reduced ? 0 : zoom ? 1.1 : 1.7, zoom);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section, mobile, phase]);
+  }, [section, mobile, phase, projectIndex, focus]);
+
+  // keep a close-up fitted when the window is resized
+  useEffect(() => {
+    if (phase !== "explore" || !focus) return;
+    const { shot } = pickShot(section, mobile, projectIndex, focus, { vfov: vfovFor(aspect, mobile), aspect });
+    flyTo(shot, 0.4, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aspect]);
 
   useEffect(() => {
     const s = rig.current;
@@ -172,9 +250,7 @@ export function CameraRig({ section, mobile }: { section: Section; mobile: boole
       s.aspect = aspect;
       s.mobile = mobile;
       const cam = frame.camera as THREE.PerspectiveCamera;
-      const hfov = mobile ? 62 : 63; // degrees — a 38° vertical FOV at 16:9
-      const vfov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(hfov / 2)) / aspect));
-      cam.fov = THREE.MathUtils.clamp(vfov, 34, mobile ? 78 : 66);
+      cam.fov = vfovFor(aspect, mobile);
       cam.updateProjectionMatrix();
     }
     const t = Math.min(1, s.progress.t);
@@ -182,7 +258,8 @@ export function CameraRig({ section, mobile }: { section: Section; mobile: boole
     s.look.lerpVectors(s.lookFrom, s.lookTo, lookEase(t));
 
     // subtle mouse parallax, strongest on the wide shot
-    const strength = reduced || mobile ? 0 : section === "home" ? 1 : 0.45;
+    // no parallax while a showcase is in use, so the screen stays perfectly still
+    const strength = reduced || mobile || focus ? 0 : section === "home" ? 1 : section === "projects" ? 0.2 : 0.45;
     const k = 1 - Math.exp(-dt * 3);
     s.parallax.x += (pointer.x * strength - s.parallax.x) * k;
     s.parallax.y += (pointer.y * strength - s.parallax.y) * k;

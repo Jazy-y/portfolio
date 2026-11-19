@@ -52,6 +52,11 @@ export type Project = {
   accent: string;
   repo?: string;
   live?: string;
+  /**
+   * 3D showcase: "phone" runs the interactive app recreation on a phone,
+   * "site" embeds the live website in the main monitor (the site must allow framing).
+   */
+  showcase?: "phone" | "site";
 };
 
 export const projects: Project[] = [
@@ -73,6 +78,7 @@ export const projects: Project[] = [
     imageAlt: "Food Culture Guide app logo",
     accent: "#f59e0b",
     repo: "https://github.com/Jazy-y/food-culture-guide",
+    showcase: "phone",
   },
   {
     slug: "foottn",
@@ -112,24 +118,28 @@ export const projects: Project[] = [
     imageAlt: "Viorika store home page",
     accent: "#e5e7eb",
     live: "https://viorika.shop",
+    showcase: "site",
   },
   {
     slug: "merveilles-artisanat",
     title: "Merveilles de l'Artisanat",
-    tagline: "Multilingual e-commerce for Tunisian artisans",
+    tagline: "E-commerce & workshop booking for Tunisian artisans",
     context: "Freelance · client project",
     year: "2026",
     description:
-      "A multilingual marketplace presenting Tunisian artisans' products and workshops, with online payments and an admin back office.",
+      "A French-language online shop for Tunisian handcrafted jewellery, where customers also book hands-on craft workshops and trainings. Orders use cash on delivery, and a role-based admin back office manages the whole catalogue.",
     contributions: [
-      "Built the platform with Next.js, React and TypeScript on PostgreSQL with Prisma.",
-      "Implemented product and workshop management, authentication and the admin dashboard.",
-      "Integrated Stripe and PayPal payments.",
+      "Built the storefront with Next.js 15, React 19 and TypeScript on PostgreSQL with Prisma: catalogue, product pages, cart, wishlist, reviews and cash-on-delivery checkout.",
+      "Implemented workshop and training booking, customer accounts and NextAuth.js authentication with role checks in middleware and API routes.",
+      "Built the admin dashboard (products, stock, orders, bookings, users, audit log) and hardened the app with Zod validation, CSRF protection, rate limiting and strict security headers.",
     ],
-    stack: ["Next.js", "React", "TypeScript", "PostgreSQL", "Prisma", "Stripe", "PayPal"],
-    image: null,
-    imageAlt: "",
+    stack: ["Next.js 15", "React 19", "TypeScript", "PostgreSQL", "Prisma", "NextAuth.js", "Tailwind CSS", "Vercel"],
+    image: "/projects/merveilles.webp",
+    imageAlt: "Merveilles de l'Artisanat storefront home page",
     accent: "#c084fc",
+    repo: "https://github.com/Jazy-y/merveilles-de-lartisanat",
+    live: "https://merveilles-de-lartisanat.vercel.app",
+    showcase: "site",
   },
 ];
 
@@ -153,7 +163,7 @@ export const skillGroups: SkillGroup[] = [
     id: "int",
     label: "Integrations",
     color: "#f59e0b",
-    items: ["Stripe", "PayPal", "OpenAI API", "Google Cloud Vision", "Clarifai", "Google Places", "Cloudinary"],
+    items: ["Stripe", "OpenAI API", "Google Cloud Vision", "Clarifai", "Google Places", "Cloudinary"],
   },
   {
     id: "ops",
@@ -180,7 +190,7 @@ export const timeline: TimelineItem[] = [
     points: [
       "FootTN — stadium booking platform with Stripe payments (Next.js, Firebase).",
       "Viorika — e-commerce store deployed on an OVH VPS (Nginx, SSL, PM2).",
-      "Merveilles de l'Artisanat — multilingual e-commerce (PostgreSQL, Prisma, Stripe, PayPal).",
+      "Merveilles de l'Artisanat — e-commerce and workshop booking (PostgreSQL, Prisma, NextAuth.js).",
     ],
   },
   {

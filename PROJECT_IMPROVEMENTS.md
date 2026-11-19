@@ -16,6 +16,10 @@ A running log of the important fixes and technical decisions, and the pitfalls t
 | GSAP for the intro and camera paths; `maath` damping for hover and small motion | GSAP timelines are skippable (`progress(1)`). Damping is interruptible and frame-rate independent. |
 | Server-rendered 2D view | Used for SEO, as an accessible alternative, and as the WebGL fallback, all from the same components as the 3D panels. |
 
+| Live websites on the monitor via drei `Html transform` iframes | Viorika and Merveilles allow framing, so visitors use the real sites instead of screenshots. Mounted only after the camera arrives, desktop only; FootTN keeps a screenshot because it sends `X-Frame-Options: DENY`. |
+| CultureGo recreation on a 3D phone | The PFE is a mobile app that can't run in a browser, so its screens were rebuilt in React from the source and real screenshots, with live TheMealDB data. Labelled everywhere as a recreation, not the production app. |
+| Focus shots fitted to the viewport (`fitShot`) | A fixed camera distance made the close-ups too small on square windows and clipped on wide ones. |
+
 ## Fixes made during QA
 
 - **Lamp geometry.** The first arm angles pointed the lamp head away from the desk and into the left monitor. Recomputed the joint angles and moved the lamp to the front-left corner, aimed at the notebook and phone.
@@ -29,6 +33,10 @@ A running log of the important fixes and technical decisions, and the pitfalls t
 - **Projects, skills and contact framings** were too tight on narrower windows; the cameras were pulled back.
 - **Dark wall features.** Added brass picture lights above the pinboard and the timeline.
 - **React Compiler lint rules.** Mutable per-frame buffers moved from `useMemo` to refs. Environment detection uses `useSyncExternalStore` instead of `setState` in effects. The camera FOV is updated from the `useFrame` state, not a hook value.
+
+- **CSS modules turned global.** The Turbopack rule ran every `*.css` file through the Tailwind loader `as: "*.css"`, so module class names (e.g. `.hero`) leaked into the page. The rule now targets `globals.css` only.
+- **Wall layout vs the slat wall.** The pinboard, the first timeline card and the plant hid content behind or in front of the slats. Everything on the back wall now stays outside x ∈ [-1.35, 1.35].
+- **Hologram labels.** Orbit rings crossed the chips' text. Rings render first without depth writes, chips are near-opaque, and far-side chips fade.
 
 ## Pitfalls to avoid
 

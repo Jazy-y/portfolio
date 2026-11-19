@@ -28,7 +28,9 @@ export function Panel({ onNavigate, mobile }: { onNavigate: (s: Section) => void
   const section = useStore((s) => s.section);
   const phase = useStore((s) => s.phase);
   const reduced = useStore((s) => s.reducedMotion);
-  const open = section !== "home" && phase === "explore";
+  const focus = useStore((s) => s.focus);
+  // the panel steps aside while a project showcase is in use
+  const open = section !== "home" && phase === "explore" && !focus;
   const scroller = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLDivElement>(null);
 

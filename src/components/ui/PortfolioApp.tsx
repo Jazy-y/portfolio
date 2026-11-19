@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { SECTIONS, sectionMeta, type Section } from "@/content/profile";
 import { useStore } from "@/lib/store";
 import { ClassicView } from "./ClassicView";
+import { DemoModal } from "./DemoModal";
+import { FocusBar } from "./FocusBar";
 import { Hero } from "./Hero";
 import { Loader } from "./Loader";
 import { Nav } from "./Nav";
@@ -71,6 +73,7 @@ export function PortfolioApp({ initialSection }: { initialSection: Section }) {
   const setPhase = useStore((s) => s.setPhase);
   const setQuality = useStore((s) => s.setQuality);
   const setReducedMotion = useStore((s) => s.setReducedMotion);
+  const setCanFocus = useStore((s) => s.setCanFocus);
 
   // Sync detected environment into the shared store (external state, not React state).
   useEffect(() => {
@@ -79,6 +82,11 @@ export function PortfolioApp({ initialSection }: { initialSection: Section }) {
   useEffect(() => {
     setReducedMotion(reduced);
   }, [reduced, setReducedMotion]);
+  // the showcases can be used in place only in the desktop 3D view
+  useEffect(() => {
+    setCanFocus(mode === "3d" && !mobile);
+    if (mode !== "3d" || mobile) useStore.getState().setFocus(false);
+  }, [mode, mobile, setCanFocus]);
   useEffect(() => {
     const nav = navigator as Navigator & { deviceMemory?: number };
     const weak = (nav.deviceMemory !== undefined && nav.deviceMemory < 4) || (navigator.hardwareConcurrency ?? 8) < 4;
@@ -107,9 +115,14 @@ export function PortfolioApp({ initialSection }: { initialSection: Section }) {
   }, [setSection]);
 
   useEffect(() => {
-    if (mode !== "3d") return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && useStore.getState().section !== "home") navigate("home");
+      if (e.key !== "Escape") return;
+      const st = useStore.getState();
+      // close the innermost layer first: demo modal, then showcase focus, then the section
+      if (st.demo) st.setDemo(null);
+      else if (mode !== "3d") return;
+      else if (st.focus) st.setFocus(false);
+      else if (st.section !== "home") navigate("home");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -147,6 +160,7 @@ export function PortfolioApp({ initialSection }: { initialSection: Section }) {
           <main id="main" className="pointer-events-none relative z-10 min-h-dvh">
             <Hero onNavigate={navigate} />
             <Panel onNavigate={navigate} mobile={mobile} />
+            <FocusBar />
           </main>
           <Loader />
         </>
@@ -155,6 +169,7 @@ export function PortfolioApp({ initialSection }: { initialSection: Section }) {
       <div hidden={mode === "3d"} className={mode === "pending" ? "opacity-0" : ""}>
         <ClassicView onSwitchTo3d={webgl ? () => switchMode("3d") : undefined} webgl={webgl} active={mode !== "3d"} />
       </div>
+      <DemoModal />
     </>
   );
 }

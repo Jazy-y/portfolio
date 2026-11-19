@@ -248,7 +248,8 @@ function FloorPlant() {
     if (group.current) group.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.6) * 0.015;
   });
   return (
-    <group position={[2.3, 0, -0.85]}>
+    // in the corner, clear of the line of sight to the timeline cards
+    <group position={[2.62, 0, -0.45]}>
       <mesh position={[0, 0.2, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[0.17, 0.13, 0.4, 32]} />
         <meshStandardMaterial color="#d8d2c4" roughness={0.6} />

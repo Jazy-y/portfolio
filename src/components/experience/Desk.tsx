@@ -182,8 +182,9 @@ function Mug() {
           <circleGeometry args={[0.036, 40]} />
           <meshStandardMaterial color="#2b170c" roughness={0.15} />
         </mesh>
-        <mesh position={[0.045, 0.05, 0]} rotation-y={Math.PI / 2}>
-          <torusGeometry args={[0.022, 0.0055, 12, 24, Math.PI]} />
+        {/* handle: a vertical half-ring on the mug's side, attached at both ends */}
+        <mesh position={[0.036, 0.05, 0]} rotation-z={-Math.PI / 2} castShadow>
+          <torusGeometry args={[0.024, 0.006, 14, 28, Math.PI]} />
           <meshStandardMaterial color="#e9e4dc" roughness={0.3} />
         </mesh>
         <group ref={puffs}>

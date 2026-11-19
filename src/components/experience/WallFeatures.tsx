@@ -35,7 +35,7 @@ function PictureLight({ position, width, washSize }: { position: [number, number
   useFrame(() => {
     const p = useStore.getState().power;
     if (wash.current) wash.current.opacity = p * 0.55;
-    if (bulb.current) bulb.current.emissiveIntensity = p * 3;
+    if (bulb.current) bulb.current.emissiveIntensity = p * 0.9;
   });
   return (
     <group>
@@ -77,11 +77,15 @@ function noteTexture(lines: string[], bg: string, ink: string, title?: string) {
   let y = 30;
   if (title) {
     ctx.font = `700 30px ${fontFamily("display")}`;
-    ctx.fillText(title, 24, y);
+    ctx.fillText(title, 24, y, 320 - 48);
     y += 50;
   }
-  ctx.font = `24px ${fontFamily("sans")}`;
+  // shrink a line that would run past the note's edge instead of clipping it
+  const maxW = 320 - 48;
   for (const l of lines) {
+    ctx.font = `24px ${fontFamily("sans")}`;
+    const w = ctx.measureText(l).width;
+    if (w > maxW) ctx.font = `${Math.floor((24 * maxW) / w)}px ${fontFamily("sans")}`;
     ctx.fillText(l, 24, y);
     y += 34;
   }
@@ -120,6 +124,9 @@ function corkTexture() {
   return canvasTexture(canvas);
 }
 
+/** Left of the slat wall (first slat at x = -1.3), so no note is hidden behind the slats. */
+export const PINBOARD_X = -1.86;
+
 export function Pinboard({ go }: { go: (s: Section) => void }) {
   const cork = useMemo(() => corkTexture(), []);
   const cards = useMemo(
@@ -134,8 +141,8 @@ export function Pinboard({ go }: { go: (s: Section) => void }) {
   );
   const pins = cards.map((c) => new THREE.Vector3(c.pos[0], c.pos[1] + c.size[1] / 2 - 0.02, 0.02));
   return (
-    <Interactive id="about" label={`About ${profile.firstName} →`} onSelect={() => go("about")} labelPosition={[-1.72, 2.02, WALL_Z + 0.1]} lift={0}>
-      <group position={[-1.72, 1.6, WALL_Z + 0.025]}>
+    <Interactive id="about" label={`About ${profile.firstName} →`} onSelect={() => go("about")} labelPosition={[PINBOARD_X, 2.02, WALL_Z + 0.1]} lift={0}>
+      <group position={[PINBOARD_X, 1.6, WALL_Z + 0.025]}>
         <RoundedBox args={[0.98, 0.7, 0.03]} radius={0.01} castShadow receiveShadow>
           <meshStandardMaterial color="#3a2a1d" roughness={0.6} />
         </RoundedBox>
@@ -160,7 +167,7 @@ export function Pinboard({ go }: { go: (s: Section) => void }) {
         <Line points={[pins[0], pins[1], pins[2]]} color="#ef4444" lineWidth={1.2} />
         <Line points={[pins[1], pins[3], pins[4]]} color="#ef4444" lineWidth={1.2} />
       </group>
-      <PictureLight position={[-1.72, 2.0, WALL_Z + 0.06]} width={0.5} washSize={[1.3, 0.95]} />
+      <PictureLight position={[PINBOARD_X, 2.0, WALL_Z + 0.06]} width={0.5} washSize={[1.3, 0.95]} />
     </Interactive>
   );
 }
@@ -217,11 +224,12 @@ export function TimelineWall({ go }: { go: (s: Section) => void }) {
   useFrame((state) => {
     if (railMat.current) railMat.current.emissiveIntensity = 1.2 * useStore.getState().power + Math.sin(state.clock.elapsedTime) * 0.1;
   });
-  const startX = 1.38;
-  const gap = 0.29;
+  // starts right of the slat wall (which ends at x ≈ 1.34) so no card is hidden
+  const startX = 1.53;
+  const gap = 0.27;
   return (
     <group>
-      <Interactive id="experience" label="Experience & education →" onSelect={() => go("experience")} labelPosition={[1.82, 1.95, WALL_Z + 0.1]} lift={0}>
+      <Interactive id="experience" label="Experience & education →" onSelect={() => go("experience")} labelPosition={[1.93, 1.95, WALL_Z + 0.1]} lift={0}>
         <group position={[0, 0, WALL_Z + 0.02]}>
           <mesh position={[startX + gap * 1.5, 1.42, 0]}>
             <boxGeometry args={[gap * 4 + 0.08, 0.008, 0.008]} />
@@ -245,11 +253,11 @@ export function TimelineWall({ go }: { go: (s: Section) => void }) {
           })}
         </group>
       </Interactive>
-      <PictureLight position={[1.82, 1.82, WALL_Z + 0.06]} width={0.6} washSize={[1.4, 0.8]} />
+      <PictureLight position={[1.93, 1.82, WALL_Z + 0.06]} width={0.6} washSize={[1.3, 0.8]} />
       {/* floating shelf with books and a plant */}
-      <group position={[1.8, 1.98, WALL_Z + 0.12]}>
+      <group position={[1.95, 1.98, WALL_Z + 0.12]}>
         <mesh castShadow receiveShadow>
-          <boxGeometry args={[1.05, 0.03, 0.22]} />
+          <boxGeometry args={[0.95, 0.03, 0.22]} />
           <meshStandardMaterial color="#4a2f22" roughness={0.6} />
         </mesh>
         {["#0f766e", "#7c2d12", "#1e3a8a", "#d6c7a1", "#334155", "#9a3412"].map((c, i) => (
@@ -273,13 +281,16 @@ export function TimelineWall({ go }: { go: (s: Section) => void }) {
 function chipTexture(text: string, color: string) {
   const { canvas, ctx } = createCanvas(320, 80);
   roundRect(ctx, 4, 4, 312, 72, 36);
-  ctx.fillStyle = "rgba(6,12,20,0.78)";
+  // near-opaque so the orbit rings behind a chip never show through its text
+  ctx.fillStyle = "rgba(6,12,20,0.94)";
   ctx.fill();
   ctx.strokeStyle = color;
   ctx.lineWidth = 3;
   ctx.stroke();
   ctx.fillStyle = "#f8fafc";
   ctx.font = `600 32px ${fontFamily("sans")}`;
+  const w = ctx.measureText(text).width;
+  if (w > 270) ctx.font = `600 ${Math.floor((32 * 270) / w)}px ${fontFamily("sans")}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, 160, 42);
@@ -287,6 +298,8 @@ function chipTexture(text: string, color: string) {
 }
 
 const HOLO_POS: [number, number, number] = [0.78, DESK_TOP, -0.1];
+/** Vertical spacing between the skill-group orbits. */
+const LEVEL_GAP = 0.1;
 
 export function SkillsHologram({ section, go }: { section: Section; go: (s: Section) => void }) {
   const open = section === "skills";
@@ -305,6 +318,8 @@ export function SkillsHologram({ section, go }: { section: Section; go: (s: Sect
   const scale = useRef(0);
   const [hoverChip, setHoverChip] = useState<number | null>(null);
   const reduced = useStore((s) => s.reducedMotion);
+  const chipMats = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
+  const tmp = useRef({ chip: new THREE.Vector3(), center: new THREE.Vector3() });
 
   useFrame((state, dt) => {
     const t = state.clock.elapsedTime;
@@ -315,6 +330,20 @@ export function SkillsHologram({ section, go }: { section: Section; go: (s: Sect
       if (!reduced) orbit.current.rotation.y += dt * 0.12;
     }
     if (cone.current) cone.current.opacity = 0.02 + scale.current * 0.05;
+    // chips on the far side of the orbit fade out so the front ones stay readable
+    if (orbit.current?.visible) {
+      const { chip, center } = tmp.current;
+      orbit.current.getWorldPosition(center);
+      const dc = center.distanceTo(state.camera.position);
+      orbit.current.children.forEach((child) => {
+        const i = child.userData.chip as number | undefined;
+        const mat = i === undefined ? null : chipMats.current[i];
+        if (!mat) return;
+        child.getWorldPosition(chip);
+        const behind = THREE.MathUtils.clamp((chip.distanceTo(state.camera.position) - dc) / 0.3, -1, 1);
+        mat.opacity = THREE.MathUtils.lerp(1, 0.18, THREE.MathUtils.smoothstep(behind, -0.2, 0.8));
+      });
+    }
     if (core.current) {
       core.current.rotation.y = t * 0.6;
       core.current.rotation.x = t * 0.3;
@@ -346,19 +375,21 @@ export function SkillsHologram({ section, go }: { section: Section; go: (s: Sect
         </group>
       </Interactive>
       <group ref={orbit} position={[HOLO_POS[0], DESK_TOP + 0.36, HOLO_POS[2]]}>
+        {/* rings draw first and write no depth, so chips always paint over them */}
         {Array.from({ length: levels }).map((_, gi) => (
-          <mesh key={gi} position={[0, (gi - (levels - 1) / 2) * 0.09, 0]} rotation-x={Math.PI / 2}>
+          <mesh key={gi} position={[0, (gi - (levels - 1) / 2) * LEVEL_GAP, 0]} rotation-x={Math.PI / 2} renderOrder={1}>
             <torusGeometry args={[0.26 + (gi % 2) * 0.05, 0.0012, 6, 96]} />
-            <meshBasicMaterial color={skillGroups[gi].color} transparent opacity={0.45} toneMapped={false} />
+            <meshBasicMaterial color={skillGroups[gi].color} transparent opacity={0.3} depthWrite={false} toneMapped={false} />
           </mesh>
         ))}
         {chips.map((c, i) => {
           const r = 0.26 + (c.group % 2) * 0.05;
-          const y = (c.group - (levels - 1) / 2) * 0.09;
+          const y = (c.group - (levels - 1) / 2) * LEVEL_GAP;
           const hovered = hoverChip === i;
           return (
-            <Billboard key={i} position={[Math.cos(c.angle) * r, y, Math.sin(c.angle) * r]}>
+            <Billboard key={i} position={[Math.cos(c.angle) * r, y, Math.sin(c.angle) * r]} userData={{ chip: i }}>
               <mesh
+                renderOrder={2}
                 scale={hovered ? 1.35 : 1}
                 onPointerOver={(e) => {
                   e.stopPropagation();
@@ -367,7 +398,15 @@ export function SkillsHologram({ section, go }: { section: Section; go: (s: Sect
                 onPointerOut={() => setHoverChip(null)}
               >
                 <planeGeometry args={[0.1, 0.025]} />
-                <meshBasicMaterial map={c.tex} transparent toneMapped={false} depthWrite={false} />
+                <meshBasicMaterial
+                  ref={(m) => {
+                    chipMats.current[i] = m;
+                  }}
+                  map={c.tex}
+                  transparent
+                  toneMapped={false}
+                  depthWrite={false}
+                />
               </mesh>
             </Billboard>
           );

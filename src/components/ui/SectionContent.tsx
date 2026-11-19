@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, Briefcase, Check, Copy, ExternalLink, GraduationCap, Mail, MapPin, Send } from "lucide-react";
+import { ArrowLeft, ArrowRight, Briefcase, Check, Copy, ExternalLink, GraduationCap, Mail, MapPin, MousePointerClick, Send, Smartphone } from "lucide-react";
 import Image from "next/image";
 import { useState, type FormEvent } from "react";
 import { languages, profile, projects, skillGroups, timeline } from "@/content/profile";
@@ -84,6 +84,15 @@ export function ProjectsContent({ showSelector = true }: { showSelector?: boolea
 }
 
 export function ProjectCard({ project: p, withImage = false }: { project: (typeof projects)[number]; withImage?: boolean }) {
+  const canFocus = useStore((s) => s.canFocus);
+  const section = useStore((s) => s.section);
+  // in the desktop 3D view the showcase is used in place; elsewhere the phone demo opens in a modal
+  const inPlace = canFocus && section === "projects";
+  const openShowcase = () => {
+    const st = useStore.getState();
+    if (inPlace) st.setFocus(true);
+    else st.setDemo(p.slug);
+  };
   return (
     <div>
       {withImage && p.image && (
@@ -120,9 +129,19 @@ export function ProjectCard({ project: p, withImage = false }: { project: (typeo
         ))}
       </ul>
       <div className="mt-4 flex flex-wrap gap-2">
+        {p.showcase === "phone" && (
+          <button className="btn-primary" onClick={openShowcase}>
+            <Smartphone size={15} /> Try the app demo
+          </button>
+        )}
+        {p.showcase === "site" && inPlace && (
+          <button className="btn-primary" onClick={openShowcase}>
+            <MousePointerClick size={15} /> Use it on the monitor
+          </button>
+        )}
         {p.live && (
-          <a className="btn-primary" href={p.live} target="_blank" rel="noopener noreferrer">
-            Live demo <ExternalLink size={15} />
+          <a className={p.showcase === "site" && inPlace ? "btn-ghost" : "btn-primary"} href={p.live} target="_blank" rel="noopener noreferrer">
+            Live site <ExternalLink size={15} />
           </a>
         )}
         {p.repo && (
@@ -132,6 +151,12 @@ export function ProjectCard({ project: p, withImage = false }: { project: (typeo
         )}
         {!p.live && !p.repo && <span className="text-sm text-slate-500">Private client project — code and site not public.</span>}
       </div>
+      {p.showcase === "phone" && (
+        <p className="mt-3 text-xs leading-relaxed text-slate-500">
+          The demo is a front-end recreation of the app&apos;s screens, built for this portfolio from the source code and real screenshots. Meals load
+          live from TheMealDB like in the app; scanning, translation and restaurants show sample results.
+        </p>
+      )}
     </div>
   );
 }
