@@ -220,7 +220,9 @@ export function ExperienceContent() {
 
 export function ContactContent() {
   const [copied, setCopied] = useState(false);
-  const [sent, setSent] = useState(false);
+  // the composed message, kept for the fallbacks when no email app opens (e.g. a desktop without a mail client)
+  const [draft, setDraft] = useState<{ subject: string; body: string } | null>(null);
+  const [draftCopied, setDraftCopied] = useState(false);
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(profile.email);
@@ -236,10 +238,21 @@ export function ContactContent() {
     const name = String(data.get("name") ?? "").trim();
     const from = String(data.get("email") ?? "").trim();
     const message = String(data.get("message") ?? "").trim();
-    const subject = encodeURIComponent(`Portfolio contact from ${name || "a visitor"}`);
-    const body = encodeURIComponent(`${message}\n\n— ${name}${from ? ` (${from})` : ""}`);
-    window.location.href = `mailto:${profile.email}?subject=${subject}&body=${body}`;
-    setSent(true);
+    const subject = `Portfolio contact from ${name || "a visitor"}`;
+    const body = `${message}\n\n— ${name}${from ? ` (${from})` : ""}`;
+    window.location.href = `mailto:${profile.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setDraft({ subject, body });
+    setDraftCopied(false);
+  };
+  const gmailUrl = (d: { subject: string; body: string }) =>
+    `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(profile.email)}&su=${encodeURIComponent(d.subject)}&body=${encodeURIComponent(d.body)}`;
+  const copyDraft = async (d: { subject: string; body: string }) => {
+    try {
+      await navigator.clipboard.writeText(`To: ${profile.email}\nSubject: ${d.subject}\n\n${d.body}`);
+      setDraftCopied(true);
+    } catch {
+      setDraftCopied(false);
+    }
   };
   return (
     <div>
@@ -286,7 +299,19 @@ export function ContactContent() {
         <button type="submit" className="btn-primary w-full justify-center">
           <Send size={16} /> Send message
         </button>
-        {sent && <p className="text-xs text-slate-400">Your email app should open with the message ready to send.</p>}
+        {draft && (
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-400" role="status">
+            <p>Your email app should open with the message ready to send. Nothing opened? Send it another way:</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <a className="btn-ghost !py-1.5 text-xs" href={gmailUrl(draft)} target="_blank" rel="noopener noreferrer">
+                <Mail size={14} /> Open in Gmail <ExternalLink size={12} />
+              </a>
+              <button type="button" className="btn-ghost !py-1.5 text-xs" onClick={() => copyDraft(draft)}>
+                {draftCopied ? <Check size={14} /> : <Copy size={14} />} {draftCopied ? "Copied" : "Copy message"}
+              </button>
+            </div>
+          </div>
+        )}
       </form>
     </div>
   );

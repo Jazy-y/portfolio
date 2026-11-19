@@ -129,3 +129,49 @@ export const SAMPLE_TRANSLATION = [
   "Mutton Jhola (Half-PC / Full-5PC)",
   "Mutton Kasa (Half-3PC / Full-5PC)",
 ];
+
+/** Currencies and example rates from the app (src/utils/currencyUtils.ts). Prices are stored in TND. */
+export const CURRENCIES = [
+  { code: "TND", name: "Tunisian Dinar", symbol: "DT", rate: 1 },
+  { code: "USD", name: "US Dollar", symbol: "$", rate: 0.32 },
+  { code: "EUR", name: "Euro", symbol: "€", rate: 0.29 },
+  { code: "GBP", name: "British Pound", symbol: "£", rate: 0.25 },
+  { code: "JPY", name: "Japanese Yen", symbol: "¥", rate: 42.53 },
+] as const;
+export type CurrencyCode = (typeof CURRENCIES)[number]["code"];
+
+/**
+ * Formatting as in the app's formatPrice(). The rates mean "1 TND = rate units",
+ * so prices are multiplied (the app's convertPrice() divides, which inflates them).
+ */
+export function formatPrice(price: string, currency: CurrencyCode): string {
+  const tnd = parseFloat(price.match(/\d+(\.\d+)?/)?.[0] ?? "0");
+  const c = CURRENCIES.find((x) => x.code === currency) ?? CURRENCIES[0];
+  const v = tnd * c.rate;
+  if (c.code === "TND") return `${v.toFixed(2)} DT`;
+  if (c.code === "JPY") return `${c.symbol}${Math.round(v)}`;
+  return `${c.symbol}${v.toFixed(2)}`;
+}
+
+/** Subscription plans from the app (src/services/subscription-service.ts). */
+export const PLANS = [
+  {
+    name: "Basic",
+    price: 4.99,
+    features: ["5 countries per month", "Detailed food information", "Save favorites", "Cultural insights", "Share on social media"],
+  },
+  {
+    name: "Premium",
+    price: 9.99,
+    features: [
+      "Unlimited countries",
+      "Detailed food information",
+      "Save favorites",
+      "Cultural insights",
+      "Share on social media",
+      "Recipe suggestions",
+      "Cooking tips",
+      "Monthly cultural newsletter",
+    ],
+  },
+];

@@ -113,6 +113,13 @@
   overflow-x: auto;
   scrollbar-width: none;
   background: #fafafa;
+  cursor: grab;
+  user-select: none;
+  /* fade at the right edge: more countries are available */
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+.chips:active {
+  cursor: grabbing;
 }
 .chips::-webkit-scrollbar {
   display: none;
@@ -158,7 +165,16 @@
 .cardImg {
   position: relative;
   height: 172px;
-  background: #eee center / cover no-repeat;
+  background: #eee;
+  overflow: hidden;
+  cursor: pointer;
+}
+.cardPhoto {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .heart {
   position: absolute;
@@ -639,4 +655,138 @@
   inset: 0;
   z-index: 20;
   background: linear-gradient(115deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 32%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.05) 100%);
+}
+
+/* ── Profile sheets, forms and toast ── */
+.sheetHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 17px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 14px;
+}
+.fieldLabel {
+  display: block;
+  font-weight: 600;
+  color: #444;
+  margin: 12px 0 6px;
+}
+.input {
+  width: 100%;
+  border: 1px solid #e3e3e3;
+  background: #f7f7f7;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font: inherit;
+  color: #333;
+  resize: none;
+  outline: none;
+}
+.input:focus {
+  border-color: var(--primary);
+}
+.primaryBtn:disabled {
+  opacity: 0.5;
+}
+.outlineBtn {
+  width: 100%;
+  border: 1.5px solid var(--primary);
+  color: var(--primary);
+  border-radius: 999px;
+  padding: 10px;
+  font-weight: 600;
+}
+.pillBtn {
+  display: inline-block;
+  margin-top: 8px;
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.quickBtn {
+  font-size: 11px;
+  color: #444;
+  border-radius: 12px;
+  padding: 2px 0;
+}
+.settingRow {
+  width: 100%;
+  text-align: left;
+}
+.settingRow:active,
+.quickBtn:active,
+.currencyRow:active {
+  background: #f5f5f5;
+}
+.trashBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--primary);
+  color: #fff;
+}
+.currencyRow {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  color: #333;
+}
+.currencyActive {
+  background: #f6f6f6;
+}
+.currencySymbol {
+  width: 26px;
+  text-align: center;
+  font-size: 17px;
+}
+.checkDot {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--primary);
+  color: #fff;
+}
+.planCard {
+  border: 1px solid #eee;
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.login {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 70px 26px 20px;
+  text-align: center;
+  animation: fade 0.3s both;
+}
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  z-index: 20;
+  max-width: 86%;
+  background: rgba(30, 30, 30, 0.92);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+  animation: fade 0.2s both;
 }

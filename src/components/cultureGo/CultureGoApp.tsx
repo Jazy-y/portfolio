@@ -9,6 +9,10 @@
 
 import {
   ArrowLeft,
+  Check,
+  Image as ImageIcon,
+  LogOut,
+  Trash2,
   BatteryFull,
   Signal,
   Wifi,
@@ -38,12 +42,120 @@ import {
   Zap,
   Globe,
 } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import s from "./cultureGo.module.css";
-import { COUNTRIES, RESTAURANTS, SAMPLE_TRANSLATION, mealDetail, mealsByCountry, type Meal, type MealDetail } from "./data";
+import {
+  COUNTRIES,
+  CURRENCIES,
+  PLANS,
+  RESTAURANTS,
+  SAMPLE_TRANSLATION,
+  formatPrice,
+  mealDetail,
+  mealsByCountry,
+  type CurrencyCode,
+  type Meal,
+  type MealDetail,
+} from "./data";
 
 type Tab = "home" | "explore" | "scan" | "translate" | "profile";
 type View = { tab: Tab; meal?: Meal; restaurantsFor?: string };
+
+/**
+ * Horizontal scrolling for a row that only scrolls by touch otherwise: the
+ * mouse wheel scrolls it sideways and it can be dragged with the mouse.
+ * A drag doesn't trigger the click on the chip under the pointer.
+ */
+function useDragScroll<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let startX = 0;
+    let startLeft = 0;
+    let dragging = false;
+    let moved = false;
+    // the row may be CSS-scaled (3D phone, 2D modal): convert screen px to content px
+    const ratio = () => el.offsetWidth / Math.max(1, el.getBoundingClientRect().width);
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      const max = el.scrollWidth - el.clientWidth;
+      if (max <= 0) return;
+      e.preventDefault();
+      el.scrollLeft = Math.min(max, Math.max(0, el.scrollLeft + e.deltaY));
+    };
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse" || e.button !== 0) return;
+      dragging = true;
+      moved = false;
+      startX = e.clientX;
+      startLeft = el.scrollLeft;
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!dragging) return;
+      const dx = (e.clientX - startX) * ratio();
+      if (Math.abs(dx) > 4) moved = true;
+      if (moved) el.scrollLeft = startLeft - dx;
+    };
+    const onUp = () => {
+      dragging = false;
+    };
+    const onClick = (e: MouseEvent) => {
+      if (moved) {
+        e.stopPropagation();
+        e.preventDefault();
+        moved = false;
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("pointerdown", onDown);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    el.addEventListener("click", onClick, true);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      el.removeEventListener("click", onClick, true);
+    };
+  }, []);
+  return ref;
+}
+
+// ── App-wide state shared by the screens and sheets ─────────────────────────
+
+type SheetKind = "name" | "info" | "picture" | "feedback" | "currency" | "translations" | "plans" | "password" | "logout";
+type SavedTranslation = { date: string; lang: string; lines: string[] };
+type SavedFood = { name: string; date: string; img: string };
+
+type AppState = {
+  currency: CurrencyCode;
+  setCurrency: (c: CurrencyCode) => void;
+  fmt: (price: string) => string;
+  name: string;
+  setName: (n: string) => void;
+  avatar: string | null;
+  setAvatar: (url: string | null) => void;
+  translations: SavedTranslation[];
+  addTranslation: (t: SavedTranslation) => void;
+  foods: SavedFood[];
+  addFood: (f: SavedFood) => void;
+  removeFood: (i: number) => void;
+  openSheet: (k: SheetKind) => void;
+  toast: (msg: string) => void;
+  goTab: (t: Tab) => void;
+  logout: () => void;
+};
+
+const AppContext = createContext<AppState | null>(null);
+function useApp() {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error("CultureGo screens must be rendered inside CultureGoApp");
+  return ctx;
+}
+
+const today = () => new Date().toLocaleDateString("en-US");
 
 const SUSHI = "https://www.themealdb.com/images/media/meals/g046bb1663960946.jpg";
 const LOGO = "/projects/food-culture-guide-logo.png";
@@ -52,6 +164,15 @@ export function CultureGoApp({ showSplash = true }: { showSplash?: boolean }) {
   const [stack, setStack] = useState<View[]>([{ tab: "home" }]);
   const [dir, setDir] = useState<"fwd" | "back">("fwd");
   const [liked, setLiked] = useState<Meal[]>([]);
+  const [currency, setCurrency] = useState<CurrencyCode>("TND");
+  const [name, setName] = useState("guest.explorer");
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [translations, setTranslations] = useState<SavedTranslation[]>([]);
+  const [foods, setFoods] = useState<SavedFood[]>([]);
+  const [sheet, setSheet] = useState<SheetKind | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [loggedOut, setLoggedOut] = useState(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const view = stack[stack.length - 1];
 
   const push = (v: View) => {
@@ -69,6 +190,42 @@ export function CultureGoApp({ showSplash = true }: { showSplash?: boolean }) {
   const toggleLike = (m: Meal) =>
     setLiked((l) => (l.some((x) => x.id === m.id) ? l.filter((x) => x.id !== m.id) : [m, ...l]));
   const isLiked = (m: Meal) => liked.some((x) => x.id === m.id);
+
+  const toast = (msg: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToastMsg(msg);
+    toastTimer.current = setTimeout(() => setToastMsg(null), 2600);
+  };
+  useEffect(
+    () => () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    },
+    [],
+  );
+  const app: AppState = {
+    currency,
+    setCurrency,
+    fmt: (p) => formatPrice(p, currency),
+    name,
+    setName,
+    avatar,
+    setAvatar,
+    translations,
+    addTranslation: (t) => setTranslations((l) => [t, ...l]),
+    foods,
+    addFood: (f) => setFoods((l) => [f, ...l]),
+    removeFood: (i) => setFoods((l) => l.filter((_, j) => j !== i)),
+    openSheet: setSheet,
+    toast,
+    goTab: (t) => {
+      setSheet(null);
+      goTab(t);
+    },
+    logout: () => {
+      setSheet(null);
+      setLoggedOut(true);
+    },
+  };
 
   const key = `${stack.length}-${view.tab}-${view.meal?.id ?? ""}-${view.restaurantsFor ?? ""}`;
   const anim = dir === "back" ? s.back : "";
@@ -102,6 +259,7 @@ export function CultureGoApp({ showSplash = true }: { showSplash?: boolean }) {
   else content = <ProfileScreen liked={liked.length} />;
 
   return (
+    <AppContext.Provider value={app}>
     <div className={s.app}>
       <StatusBar />
       <div key={key} className={`${s.screen} ${full ? s.screenFull : ""} ${anim}`}>
@@ -117,8 +275,16 @@ export function CultureGoApp({ showSplash = true }: { showSplash?: boolean }) {
           </div>
         </div>
       )}
+      {sheet && <Sheets kind={sheet} onClose={() => setSheet(null)} />}
+      {loggedOut && <LoginScreen onGuest={() => setLoggedOut(false)} />}
+      {toastMsg && (
+        <div className={s.toast} role="status">
+          {toastMsg}
+        </div>
+      )}
       <div className={s.glare} />
     </div>
+    </AppContext.Provider>
   );
 }
 
@@ -189,6 +355,8 @@ function HomeScreen({
 }) {
   const [country, setCountry] = useState(COUNTRIES[0]);
   const [meals, setMeals] = useState<Meal[] | null>(null);
+  const chips = useDragScroll<HTMLDivElement>();
+  const { fmt } = useApp();
   useEffect(() => {
     let alive = true;
     mealsByCountry(country.area).then((m) => alive && setMeals(m));
@@ -211,16 +379,20 @@ function HomeScreen({
           </button>
         </div>
       </header>
-      <div className={s.chips} role="tablist" aria-label="Countries">
+      <div ref={chips} className={s.chips} role="tablist" aria-label="Countries">
         {COUNTRIES.map((c) => (
           <button
             key={c.label}
             role="tab"
             aria-selected={c.label === country.label}
             className={`${s.chip} ${c.label === country.label ? s.chipActive : ""}`}
-            onClick={() => {
+            onClick={(e) => {
               setMeals(null);
               setCountry(c);
+              // centre the chosen chip by scrolling only the row (scrollIntoView would also move the phone containers)
+              const chip = e.currentTarget;
+              const row = chips.current;
+              row?.scrollTo({ left: chip.offsetLeft - row.offsetLeft - (row.clientWidth - chip.offsetWidth) / 2, behavior: "smooth" });
             }}
           >
             {c.label}
@@ -231,7 +403,10 @@ function HomeScreen({
         {!meals && [0, 1].map((i) => <div key={i} className={s.skeleton} />)}
         {meals?.map((m, i) => (
           <article key={m.id} className={s.card} style={{ animationDelay: `${Math.min(i, 4) * 60}ms` }}>
-            <div className={s.cardImg} style={{ backgroundImage: `url(${m.thumb}/preview)` }} onClick={() => onOpen(m)} role="button" aria-label={`Open ${m.name}`}>
+            <div className={s.cardImg} onClick={() => onOpen(m)} role="button" aria-label={`Open ${m.name}`}>
+              {/* full 700 px photo: the 250 px preview looked blurry once stretched across the card */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={m.thumb} alt="" loading="lazy" decoding="async" className={s.cardPhoto} />
               <button
                 className={s.heart}
                 onClick={(e) => {
@@ -251,7 +426,7 @@ function HomeScreen({
                 <MapPin size={16} /> Find Nearby Restaurants
               </button>
               <div className={s.metaRow}>
-                <span className={s.price}>{m.price}</span>
+                <span className={s.price}>{fmt(m.price)}</span>
                 <span className={s.rating}>
                   <Star size={15} fill="#f5b301" color="#f5b301" /> {m.rating} <small>({m.ratingCount})</small>
                 </span>
@@ -280,6 +455,7 @@ function Detail({
   onFind: (dish: string) => void;
 }) {
   const [d, setD] = useState<MealDetail | null>(null);
+  const { fmt } = useApp();
   useEffect(() => {
     let alive = true;
     mealDetail(meal).then((x) => alive && setD(x));
@@ -303,7 +479,7 @@ function Detail({
       <div className={s.detailBody}>
         <div className={s.detailHead}>
           <h3 className={s.detailTitle}>{meal.name}</h3>
-          <span className={s.pricePill}>{meal.price}</span>
+          <span className={s.pricePill}>{fmt(meal.price)}</span>
         </div>
         <p className={s.muted} style={{ marginTop: 4 }}>
           {d ? [d.category, d.area].filter(Boolean).join(" · ") : "Loading…"}
@@ -331,6 +507,7 @@ function Detail({
 // ── Explore (liked meals) ─────────────────────────────────────────────────────
 
 function LikedScreen({ liked, onOpen, onHome }: { liked: Meal[]; onOpen: (m: Meal) => void; onHome: () => void }) {
+  const { fmt } = useApp();
   return (
     <div style={{ padding: 18 }}>
       <h2 style={{ fontSize: 23, fontWeight: 700 }}>Liked Meals</h2>
@@ -353,7 +530,7 @@ function LikedScreen({ liked, onOpen, onHome }: { liked: Meal[]; onOpen: (m: Mea
                 <span className={s.cardTitle} style={{ display: "block", fontSize: 15 }}>
                   {m.name}
                 </span>
-                <span className={s.price}>{m.price}</span>
+                <span className={s.price}>{fmt(m.price)}</span>
               </span>
             </button>
           ))}
@@ -366,6 +543,7 @@ function LikedScreen({ liked, onOpen, onHome }: { liked: Meal[]; onOpen: (m: Mea
 // ── Scan (food recognition) ──────────────────────────────────────────────────
 
 function ScanScreen() {
+  const { addFood, toast } = useApp();
   const [phase, setPhase] = useState<"idle" | "scanning" | "result">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -466,7 +644,15 @@ function ScanScreen() {
               ))}
             </div>
             <div className={s.twoBtns}>
-              <button className={`${s.primaryBtn} ${s.greenBtn}`} style={{ margin: 0, width: "100%", fontSize: 13 }}>
+              <button
+                className={`${s.primaryBtn} ${s.greenBtn}`}
+                style={{ margin: 0, width: "100%", fontSize: 13 }}
+                onClick={() => {
+                  addFood({ name: "sushi", date: today(), img: SUSHI });
+                  toast("Saved to your collection (see Profile)");
+                  setPhase("idle");
+                }}
+              >
                 <Save size={16} /> Save to Collection
               </button>
               <button className={s.primaryBtn} style={{ margin: 0, width: "100%", fontSize: 13 }} onClick={() => setPhase("idle")}>
@@ -483,6 +669,7 @@ function ScanScreen() {
 // ── Translate ────────────────────────────────────────────────────────────────
 
 function TranslateScreen() {
+  const { addTranslation, toast } = useApp();
   const [lang, setLang] = useState("French");
   const [out, setOut] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -532,7 +719,12 @@ function TranslateScreen() {
           {out.map((l) => (
             <div key={l}>{l}</div>
           ))}
-          <button className={`${s.primaryBtn} ${s.greenBtn}`} style={{ margin: "12px 0 0", width: "100%", borderRadius: 999 }}>
+          <button
+            onClick={() => {
+              addTranslation({ date: today(), lang: lang.slice(0, 2).toUpperCase(), lines: out });
+              toast("Translation saved (see Profile, Translations)");
+            }}
+            className={`${s.primaryBtn} ${s.greenBtn}`} style={{ margin: "12px 0 0", width: "100%", borderRadius: 999 }}>
             Save Translation
           </button>
         </div>
@@ -603,26 +795,41 @@ function Restaurants({ dish, onClose }: { dish: string; onClose: () => void }) {
 // ── Profile ──────────────────────────────────────────────────────────────────
 
 function ProfileScreen({ liked }: { liked: number }) {
-  const quick: [ReactNode, string, string][] = [
-    [<User key="u" size={20} color="#2bb3a3" />, "Profile Info", "#e0f6f3"],
-    [<MessageSquare key="m" size={20} color="#ff6b35" />, "Send Feedback", "#ffeee6"],
-    [<Wallet key="w" size={20} color="#8b5cf6" />, "Currency", "#efe9ff"],
-    [<Languages key="l" size={20} color="#f59e0b" />, "Translations", "#fff4dd"],
+  const { name, avatar, currency, translations, foods, removeFood, openSheet } = useApp();
+  const quick: [ReactNode, string, string, SheetKind][] = [
+    [<User key="u" size={20} color="#2bb3a3" />, "Profile Info", "#e0f6f3", "info"],
+    [<MessageSquare key="m" size={20} color="#ff6b35" />, "Send Feedback", "#ffeee6", "feedback"],
+    [<Wallet key="w" size={20} color="#8b5cf6" />, "Currency", "#efe9ff", "currency"],
+    [<Languages key="l" size={20} color="#f59e0b" />, "Translations", "#fff4dd", "translations"],
+  ];
+  const settings: [ReactNode, string, SheetKind][] = [
+    [<User key="a" size={18} color="#ff6b35" />, "Change Display Name", "name"],
+    [<KeyRound key="b" size={18} color="#ff6b35" />, "Reset Password", "password"],
+    [<ImageIcon key="c" size={18} color="#ff6b35" />, "Change Profile Picture", "picture"],
+    [<Info key="d" size={18} color="#ff6b35" />, "Update Profile Information", "info"],
+    [<Wallet key="e" size={18} color="#ff6b35" />, `App Currency (${currency})`, "currency"],
   ];
   return (
     <div style={{ paddingBottom: 16, background: "#fafafa", minHeight: "100%" }}>
       <div className={s.profileCard}>
         <div className={s.profileTop}>
-          <div className={s.avatar}>
-            <User size={38} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>guest.explorer</div>
+          <button className={s.avatar} onClick={() => openSheet("picture")} aria-label="Change profile picture">
+            {avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }} />
+            ) : (
+              <User size={38} />
+            )}
+          </button>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 18, overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
             <div className={s.muted} style={{ fontSize: 13 }}>
               <Mail size={12} style={{ display: "inline", marginRight: 4 }} />
               explorer@culturego.app
             </div>
-            <span style={{ display: "inline-block", marginTop: 8, background: "#fff", borderRadius: 999, padding: "4px 12px", fontSize: 13 }}>Edit Profile</span>
+            <button className={s.pillBtn} onClick={() => openSheet("name")}>
+              Edit Profile
+            </button>
           </div>
         </div>
         <div className={s.stats}>
@@ -633,7 +840,7 @@ function ProfileScreen({ liked }: { liked: number }) {
             <b>{liked}</b>Liked
           </span>
           <span>
-            <b>0</b>Translations
+            <b>{translations.length}</b>Translations
           </span>
         </div>
       </div>
@@ -650,7 +857,7 @@ function ProfileScreen({ liked }: { liked: number }) {
             Limited country access
           </span>
         </div>
-        <button className={s.primaryBtn} style={{ margin: "14px 0 0", width: "100%" }}>
+        <button className={s.primaryBtn} style={{ margin: "14px 0 0", width: "100%" }} onClick={() => openSheet("plans")}>
           Upgrade Plan
         </button>
       </div>
@@ -659,13 +866,13 @@ function ProfileScreen({ liked }: { liked: number }) {
       </h4>
       <div className={s.profileCard} style={{ padding: "14px 6px", margin: "0 14px" }}>
         <div className={s.quick}>
-          {quick.map(([icon, label, bg]) => (
-            <span key={label}>
+          {quick.map(([icon, label, bg, kind]) => (
+            <button key={label} onClick={() => openSheet(kind)} className={s.quickBtn}>
               <span className={s.quickIcon} style={{ background: bg }}>
                 {icon}
               </span>
               {label}
-            </span>
+            </button>
           ))}
         </div>
       </div>
@@ -673,18 +880,284 @@ function ProfileScreen({ liked }: { liked: number }) {
         Account Settings
       </h4>
       <div className={s.profileCard} style={{ margin: "0 14px" }}>
-        {[
-          [<User key="a" size={18} color="#ff6b35" />, "Change Display Name"],
-          [<KeyRound key="b" size={18} color="#ff6b35" />, "Reset Password"],
-          [<Wallet key="c" size={18} color="#ff6b35" />, "App Currency (TND)"],
-        ].map(([icon, label]) => (
-          <div key={label as string} className={s.settingRow}>
+        {settings.map(([icon, label, kind]) => (
+          <button key={label} className={s.settingRow} onClick={() => openSheet(kind)}>
             {icon}
             <span style={{ flex: 1 }}>{label}</span>
             <ChevronRight size={16} color="#bbb" />
-          </div>
+          </button>
         ))}
+        <button className={s.settingRow} style={{ color: "#e53935", borderBottom: 0 }} onClick={() => openSheet("logout")}>
+          <LogOut size={18} />
+          <span style={{ flex: 1 }}>Logout</span>
+        </button>
       </div>
+      <h4 className={s.sectionTitle} style={{ margin: "16px 16px 8px" }}>
+        Saved Foods
+      </h4>
+      <div className={s.profileCard} style={{ margin: "0 14px", padding: 12 }}>
+        {foods.length === 0 ? (
+          <p className={s.muted}>Scan a dish and tap “Save to Collection”.</p>
+        ) : (
+          foods.map((f, i) => (
+            <div key={`${f.name}-${i}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0" }}>
+              <span style={{ width: 52, height: 52, borderRadius: 999, background: `url(${f.img}) center/cover`, flex: "none" }} />
+              <span style={{ flex: 1 }}>
+                <b style={{ display: "block" }}>{f.name}</b>
+                <span className={s.muted} style={{ fontSize: 12 }}>
+                  {f.date}
+                </span>
+              </span>
+              <button className={s.trashBtn} onClick={() => removeFood(i)} aria-label={`Remove ${f.name}`}>
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+      <h4 className={s.sectionTitle} style={{ margin: "16px 16px 8px" }}>
+        Saved Translations
+      </h4>
+      <div className={s.profileCard} style={{ margin: "0 14px", padding: 12 }}>
+        {translations.length === 0 ? (
+          <p className={s.muted}>Translate a menu and tap “Save Translation”.</p>
+        ) : (
+          <button className={s.outlineBtn} onClick={() => openSheet("translations")}>
+            Show {translations.length} translation{translations.length > 1 ? "s" : ""}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Bottom sheets opened from the profile ────────────────────────────────────
+
+function SheetFrame({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  return (
+    <div className={s.sheetBackdrop} onClick={onClose}>
+      <div className={s.sheet} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
+        <div className={s.sheetHead}>
+          <span>{title}</span>
+          <button onClick={onClose} aria-label="Close">
+            <X size={20} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Sheets({ kind, onClose }: { kind: SheetKind; onClose: () => void }) {
+  const app = useApp();
+  const [text, setText] = useState(kind === "name" ? app.name : kind === "password" ? "explorer@culturego.app" : "");
+  const [age, setAge] = useState("25");
+  const [gender, setGender] = useState("Prefer not to say");
+  const file = useRef<HTMLInputElement>(null);
+  const done = (msg: string) => {
+    app.toast(msg);
+    onClose();
+  };
+
+  switch (kind) {
+    case "name":
+      return (
+        <SheetFrame title="Change Display Name" onClose={onClose}>
+          <label className={s.fieldLabel}>Display name</label>
+          <input className={s.input} value={text} onChange={(e) => setText(e.target.value)} maxLength={24} autoFocus />
+          <button
+            className={s.primaryBtn}
+            style={{ margin: "16px 0 0" }}
+            disabled={text.trim().length < 3}
+            onClick={() => {
+              app.setName(text.trim());
+              done("Display name updated");
+            }}
+          >
+            Save
+          </button>
+        </SheetFrame>
+      );
+    case "info":
+      return (
+        <SheetFrame title="Update Profile Information" onClose={onClose}>
+          <label className={s.fieldLabel}>Age: (Required)</label>
+          <input className={s.input} type="number" min={1} max={120} value={age} onChange={(e) => setAge(e.target.value)} />
+          <label className={s.fieldLabel}>Gender: (Required)</label>
+          <select className={s.input} value={gender} onChange={(e) => setGender(e.target.value)}>
+            <option>Female</option>
+            <option>Male</option>
+            <option>Prefer not to say</option>
+          </select>
+          <button className={s.primaryBtn} style={{ margin: "18px 0 0" }} disabled={!age} onClick={() => done("Profile information saved")}>
+            Save Information
+          </button>
+        </SheetFrame>
+      );
+    case "picture":
+      return (
+        <SheetFrame title="Change Profile Picture" onClose={onClose}>
+          <p className={s.muted}>Pick a photo from your device. In this demo it stays in your browser and is never uploaded.</p>
+          <input
+            ref={file}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              if (app.avatar) URL.revokeObjectURL(app.avatar);
+              app.setAvatar(URL.createObjectURL(f));
+              done("Profile picture updated");
+            }}
+          />
+          <button className={s.primaryBtn} style={{ margin: "16px 0 0" }} onClick={() => file.current?.click()}>
+            <ImageIcon size={17} /> Choose from gallery
+          </button>
+          {app.avatar && (
+            <button
+              className={s.outlineBtn}
+              style={{ marginTop: 10 }}
+              onClick={() => {
+                URL.revokeObjectURL(app.avatar!);
+                app.setAvatar(null);
+                done("Profile picture removed");
+              }}
+            >
+              Remove photo
+            </button>
+          )}
+        </SheetFrame>
+      );
+    case "feedback":
+      return (
+        <SheetFrame title="Send Feedback" onClose={onClose}>
+          <textarea className={s.input} rows={4} placeholder="Share your thoughts..." value={text} onChange={(e) => setText(e.target.value)} />
+          <button className={s.primaryBtn} style={{ margin: "14px 0 0" }} disabled={!text.trim()} onClick={() => done("Thanks! (Demo: feedback isn't sent anywhere)")}>
+            Submit
+          </button>
+        </SheetFrame>
+      );
+    case "currency":
+      return (
+        <SheetFrame title="Select Currency" onClose={onClose}>
+          {CURRENCIES.map((c) => (
+            <button
+              key={c.code}
+              className={`${s.currencyRow} ${app.currency === c.code ? s.currencyActive : ""}`}
+              onClick={() => {
+                app.setCurrency(c.code);
+                done(`Prices are now shown in ${c.name}`);
+              }}
+            >
+              <b className={s.currencySymbol}>{c.symbol}</b>
+              <span style={{ flex: 1, textAlign: "left" }}>
+                {c.name}
+                <span className={s.muted} style={{ display: "block", fontSize: 12 }}>
+                  {c.code}
+                </span>
+              </span>
+              {app.currency === c.code && (
+                <span className={s.checkDot}>
+                  <Check size={13} strokeWidth={3} />
+                </span>
+              )}
+            </button>
+          ))}
+        </SheetFrame>
+      );
+    case "translations":
+      return (
+        <SheetFrame title="Saved Translations" onClose={onClose}>
+          {app.translations.length === 0 ? (
+            <>
+              <p className={s.muted}>No saved translations yet.</p>
+              <button className={s.primaryBtn} style={{ margin: "14px 0 0" }} onClick={() => app.goTab("translate")}>
+                <Languages size={17} /> Translate a menu
+              </button>
+            </>
+          ) : (
+            app.translations.map((t, i) => (
+              <div key={i} className={s.infoCard} style={{ margin: "0 0 10px" }}>
+                <div className={s.muted} style={{ fontSize: 12 }}>
+                  {t.date}
+                </div>
+                <div style={{ color: "#ff6b35", fontWeight: 700, margin: "4px 0 6px" }}>Language: {t.lang}</div>
+                {t.lines.map((l) => (
+                  <div key={l} style={{ color: "#333" }}>
+                    {l}
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
+        </SheetFrame>
+      );
+    case "plans":
+      return (
+        <SheetFrame title="Upgrade Plan" onClose={onClose}>
+          {PLANS.map((p) => (
+            <div key={p.name} className={s.planCard}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <b style={{ fontSize: 17 }}>{p.name}</b>
+                <span style={{ color: "#ff6b35", fontWeight: 700 }}>${p.price}/month</span>
+              </div>
+              <ul style={{ margin: "8px 0 0", display: "grid", gap: 3, fontSize: 13, color: "#555" }}>
+                {p.features.map((f) => (
+                  <li key={f}>✓ {f}</li>
+                ))}
+              </ul>
+              <button className={s.primaryBtn} style={{ margin: "12px 0 0", width: "100%" }} onClick={() => done("Demo: subscriptions and payments are disabled")}>
+                Choose {p.name}
+              </button>
+            </div>
+          ))}
+        </SheetFrame>
+      );
+    case "password":
+      return (
+        <SheetFrame title="Reset Password" onClose={onClose}>
+          <p className={s.muted}>We&apos;ll send a password reset link to this email address.</p>
+          <input className={s.input} type="email" value={text} onChange={(e) => setText(e.target.value)} style={{ marginTop: 10 }} />
+          <button className={s.primaryBtn} style={{ margin: "14px 0 0" }} disabled={!text.includes("@")} onClick={() => done("Demo: no email is sent")}>
+            Send Reset Link
+          </button>
+        </SheetFrame>
+      );
+    case "logout":
+      return (
+        <SheetFrame title="Logout" onClose={onClose}>
+          <p style={{ color: "#444" }}>Are you sure you want to log out?</p>
+          <div className={s.twoBtns}>
+            <button className={s.outlineBtn} onClick={onClose}>
+              Cancel
+            </button>
+            <button className={s.primaryBtn} style={{ margin: 0, background: "#e53935" }} onClick={app.logout}>
+              Logout
+            </button>
+          </div>
+        </SheetFrame>
+      );
+  }
+}
+
+function LoginScreen({ onGuest }: { onGuest: () => void }) {
+  const { toast } = useApp();
+  return (
+    <div className={s.login}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={LOGO} alt="" style={{ width: 96, height: 96, objectFit: "contain" }} />
+      <h2 style={{ fontSize: 24, fontWeight: 700, marginTop: 8 }}>Welcome back</h2>
+      <p className={s.muted}>Sign in to continue exploring food cultures</p>
+      <input className={s.input} placeholder="Email" style={{ marginTop: 22 }} />
+      <input className={s.input} type="password" placeholder="Password" style={{ marginTop: 10 }} />
+      <button className={s.primaryBtn} style={{ margin: "16px 0 0", width: "100%" }} onClick={() => toast("Demo: sign-in is disabled")}>
+        Sign In
+      </button>
+      <button className={s.outlineBtn} style={{ marginTop: 10 }} onClick={onGuest}>
+        Continue as guest
+      </button>
     </div>
   );
 }
